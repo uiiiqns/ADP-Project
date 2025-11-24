@@ -21,9 +21,32 @@ namespace teb_local_planner
 
 struct PlannerConfig
 {
+  // Basic parameters
   double refresh_hz{20.0};
   double horizon_length{10.0};
   double safety_margin{0.2};
+  
+  // Flags
+  bool from_bag{false};
+  bool measure{false};
+  
+  // Spline parameters
+  double pre_apex_0{-4.0};
+  double pre_apex_1{-3.0};
+  double pre_apex_2{-1.5};
+  double post_apex_0{2.0};
+  double post_apex_1{3.0};
+  double post_apex_2{4.0};
+  
+  // Obstacle avoidance parameters
+  double evasion_dist{0.77};
+  double obs_traj_tresh{0.3};
+  double spline_bound_mindist{0.1};
+  double fixed_pred_time{0.15};
+  double kd_obs_pred{1.0};
+  
+  // Lookahead distance
+  double lookahead{10.0};  // in meters
 };
 
 class LocalPlannerNode : public rclcpp::Node
@@ -32,9 +55,19 @@ public:
   explicit LocalPlannerNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
+  double cur_s_{0,0};
+  double cur_d_{0,0};
+  double cur_vs_{0.0};
+
+  double gb_vmax_{0.0};
+  int gb_max_idx_{0};
+  double gb_max_s_{0.0};
+
+  double lookahead_{10.0};
   void initialize_publishers();
   void initialize_subscriptions();
   void load_parameters();
+  void wait_for_messages();
 
   void on_timer();
 
