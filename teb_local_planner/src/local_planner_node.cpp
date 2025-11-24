@@ -11,14 +11,13 @@ LocalPlannerNode::LocalPlannerNode(const rclcpp::NodeOptions & options)
   load_parameters();
   initialize_publishers();
   initialize_subscriptions();
-  
-  wait_for_messages();
 
   timer_ = create_wall_timer(
     std::chrono::milliseconds(static_cast<int>(1000.0 / config_.refresh_hz)),
     std::bind(&LocalPlannerNode::on_timer, this));
 
   RCLCPP_INFO(get_logger(), "Local planner node initialized with %.2f Hz timer.", config_.refresh_hz);
+  RCLCPP_INFO(get_logger(), "Waiting for required messages...");
 }
 
 void LocalPlannerNode::load_parameters()
@@ -94,6 +93,15 @@ void LocalPlannerNode::initialize_subscriptions()
 
 void LocalPlannerNode::on_timer()
 {
+  // 메시지가 준비될 때까지 대기
+  if (!messages_ready_) {
+    messages_ready_ = check_messages_ready();
+    if (!messages_ready_) {
+      return;  // 아직 메시지가 없으면 리턴
+    }
+    RCLCPP_INFO(get_logger(), "All required messages received. Starting planner...");
+  }
+  
   // Placeholder for planner loop. Outputs no real trajectory yet.
   auto latency_msg = std_msgs::msg::Float32();
   latency_msg.data = 0.0F;
@@ -138,38 +146,32 @@ void LocalPlannerNode::scaledWaypointsCallback(const f110_msgs::msg::WpntArray::
   global_wpnts_scaled_ = msg;
 }
 
-void LocalPlannerNode::wait_for_messages()
+bool LocalPlannerNode::check_messages_ready()
 {
-  RCLCPP_INFO(get_logger(), "Waiting for required messages...");
+  static bool state_logged = false;
+  static bool gb_logged = false;
+  static bool scaled_gb_logged = false;
   
-  bool state_received = false;
-  bool gb_received = false;
-  bool scaled_gb_received = false;
+  bool state_ready = (current_state_ != nullptr);
+  bool gb_ready = (global_wpnts_ != nullptr && !global_wpnts_->wpnts.empty());
+  bool scaled_gb_ready = (global_wpnts_scaled_ != nullptr);
   
-  rclcpp::Rate rate(10); // 10Hz로 체크
-  
-  while (rclcpp::ok() && (!state_received || !gb_received || !scaled_gb_received)) {
-    rclcpp::spin_some(shared_from_this());
-    
-    if (current_state_ && !state_received) {
-      RCLCPP_INFO(get_logger(), "Received State message.");
-      state_received = true;
-    }
-    
-    if (global_wpnts_ && !gb_received) {
-      RCLCPP_INFO(get_logger(), "Received Global Waypoints message.");
-      gb_received = true;
-    }
-    
-    if (global_wpnts_scaled_ && !scaled_gb_received) {
-      RCLCPP_INFO(get_logger(), "Received Scaled Global Waypoints message.");
-      scaled_gb_received = true;
-    }
-    
-    rate.sleep();
+  if (state_ready && !state_logged) {
+    RCLCPP_INFO(get_logger(), "Received State message.");
+    state_logged = true;
   }
   
-  RCLCPP_INFO(get_logger(), "All required messages received. Continuing...");
+  if (gb_ready && !gb_logged) {
+    RCLCPP_INFO(get_logger(), "Received Global Waypoints message.");
+    gb_logged = true;
+  }
+  
+  if (scaled_gb_ready && !scaled_gb_logged) {
+    RCLCPP_INFO(get_logger(), "Received Scaled Global Waypoints message.");
+    scaled_gb_logged = true;
+  }
+  
+  return state_ready && gb_ready && scaled_gb_ready;
 }
 
 }  // namespace teb_local_planner

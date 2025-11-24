@@ -55,8 +55,8 @@ public:
   explicit LocalPlannerNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
-  double cur_s_{0,0};
-  double cur_d_{0,0};
+  double cur_s_{0.0};
+  double cur_d_{0.0};
   double cur_vs_{0.0};
 
   double gb_vmax_{0.0};
@@ -64,10 +64,12 @@ private:
   double gb_max_s_{0.0};
 
   double lookahead_{10.0};
+  bool messages_ready_{false};
+  
   void initialize_publishers();
   void initialize_subscriptions();
   void load_parameters();
-  void wait_for_messages();
+  bool check_messages_ready();
 
   void on_timer();
 
