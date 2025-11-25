@@ -340,8 +340,9 @@ std::vector<Eigen::Vector2d> LocalPlannerNode::convert_obstacle_to_points(
   double s = obstacle.s_center;
   double d_left = obstacle.d_left;
   double d_right = obstacle.d_right;
-  double s_start = obstacle.s_start;
-  double s_end = obstacle.s_end;
+  // TODO: s_start, s_end를 사용하여 장애물의 길이 방향도 고려
+  // double s_start = obstacle.s_start;
+  // double s_end = obstacle.s_end;
   
   // 간단한 근사: 전역 경로에서 해당 s 위치의 x, y 찾기
   if (global_wpnts_scaled_ && !global_wpnts_scaled_->wpnts.empty()) {

@@ -1,6 +1,0 @@
-forzaeth_local_planner:
-  ros__parameters:
-    refresh_hz: 20.0
-    horizon_length: 8.0
-    safety_margin: 0.25
-
