@@ -13,11 +13,13 @@ find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(f110_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
   src/local_planner_node.cpp
+  src/teb.cpp
 )
 
 target_compile_features(${PROJECT_NAME} PUBLIC c_std_99 cxx_std_17)
@@ -29,6 +31,11 @@ ament_target_dependencies(${PROJECT_NAME}
   visualization_msgs
   std_msgs
   f110_msgs
+)
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIR}
 )
 
 rclcpp_components_register_nodes(${PROJECT_NAME} "teb_local_planner::LocalPlannerNode")

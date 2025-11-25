@@ -1,6 +1,8 @@
 #include "teb_local_planner/local_planner_node.hpp"
 
 #include "rclcpp_components/register_node_macro.hpp"
+#include <Eigen/Dense>
+#include <cmath>
 
 namespace teb_local_planner
 {
@@ -218,16 +220,144 @@ LocalPlannerNode::generate_evasion_trajectory(
   f110_msgs::msg::OTWpntArray wpnts;
   visualization_msgs::msg::MarkerArray markers;
   
-  // TODO: TEB 알고리즘 구현
-  // 지금은 기본 구조만 만들기
-  
   wpnts.header.stamp = now();
   wpnts.header.frame_id = "map";
   
-  // 가장 가까운 장애물 마커 발행
-  // TODO: considered_OBS 마커 생성
+  // 1. 초기 경로 생성 (전역 경로에서 일부 가져오기)
+  std::vector<Eigen::Vector2d> initial_path = get_initial_path_from_global(obstacle);
+  
+  if (initial_path.empty()) {
+    return std::make_pair(wpnts, markers);
+  }
+  
+  // 2. 장애물을 포인트로 변환
+  std::vector<Eigen::Vector2d> obstacle_points = convert_obstacle_to_points(obstacle);
+  
+  // 3. TEB 파라미터 설정
+  double v_max = gb_vmax_;
+  double a_max = 2.0;  // TODO: 파라미터로 만들기
+  double rho_min = 1.0;  // TODO: 파라미터로 만들기
+  double wheelbase = 0.33;  // F1Tenth 차량 휠베이스
+  
+  // 4. TEB 객체 생성 및 최적화
+  TEB teb(initial_path, obstacle_points, v_max, a_max, rho_min, wheelbase);
+  teb.optimize(50);  // 50번 반복 최적화
+  
+  // 5. 최적화된 경로를 waypoint로 변환
+  auto path_with_velocities = teb.get_path_with_velocities();
+  
+  for (size_t i = 0; i < path_with_velocities.size(); i++) {
+    const auto& [pos, vel] = path_with_velocities[i];
+    
+    // Frenet 좌표로 변환 (간단한 근사)
+    double s = cur_s_ + i * 0.1;  // TODO: 실제 Frenet 변환 사용
+    double d = 0.0;  // TODO: 실제 Frenet 변환 사용
+    
+    f110_msgs::msg::Wpnt wpnt;
+    wpnt.id = static_cast<int>(i);
+    wpnt.x_m = pos.x();
+    wpnt.y_m = pos.y();
+    wpnt.s_m = s;
+    wpnt.d_m = d;
+    wpnt.vx_mps = vel;
+    
+    wpnts.wpnts.push_back(wpnt);
+    
+    // 시각화 마커 생성
+    visualization_msgs::msg::Marker marker;
+    marker.header.stamp = now();
+    marker.header.frame_id = "map";
+    marker.id = static_cast<int>(i);
+    marker.type = visualization_msgs::msg::Marker::CYLINDER;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose.position.x = pos.x();
+    marker.pose.position.y = pos.y();
+    marker.pose.position.z = vel / gb_vmax_ * 0.5;
+    marker.scale.x = 0.1;
+    marker.scale.y = 0.1;
+    marker.scale.z = vel / gb_vmax_;
+    marker.color.a = 1.0;
+    marker.color.r = 0.75;
+    marker.color.b = 0.75;
+    if (config_.from_bag) {
+      marker.color.g = 0.75;
+    }
+    markers.markers.push_back(marker);
+  }
+  
+  // 6. 가장 가까운 장애물 마커 발행
+  visualization_msgs::msg::Marker obs_marker;
+  obs_marker.header.stamp = now();
+  obs_marker.header.frame_id = "map";
+  obs_marker.type = visualization_msgs::msg::Marker::SPHERE;
+  obs_marker.action = visualization_msgs::msg::Marker::ADD;
+  // TODO: 장애물 위치를 Cartesian으로 변환
+  obs_marker.pose.position.x = 0.0;  // TODO: 실제 변환
+  obs_marker.pose.position.y = 0.0;  // TODO: 실제 변환
+  obs_marker.scale.x = 0.5;
+  obs_marker.scale.y = 0.5;
+  obs_marker.scale.z = 0.5;
+  obs_marker.color.a = 0.8;
+  obs_marker.color.r = 1.0;
+  obs_marker.color.g = 0.65;
+  obs_marker.color.b = 0.65;
+  considered_obs_pub_->publish(obs_marker);
   
   return std::make_pair(wpnts, markers);
+}
+
+std::vector<Eigen::Vector2d> LocalPlannerNode::get_initial_path_from_global(
+  const f110_msgs::msg::Obstacle& obstacle)
+{
+  std::vector<Eigen::Vector2d> path;
+  
+  if (!global_wpnts_scaled_ || global_wpnts_scaled_->wpnts.empty()) {
+    return path;
+  }
+  
+  // 장애물 앞뒤로 경로 추출
+  double obs_s = obstacle.s_center;
+  double start_s = std::max(0.0, obs_s - 5.0);  // 장애물 앞 5m
+  double end_s = std::min(gb_max_s_, obs_s + 5.0);  // 장애물 뒤 5m
+  
+  for (const auto& wpnt : global_wpnts_scaled_->wpnts) {
+    if (wpnt.s_m >= start_s && wpnt.s_m <= end_s) {
+      path.emplace_back(wpnt.x_m, wpnt.y_m);
+    }
+  }
+  
+  return path;
+}
+
+std::vector<Eigen::Vector2d> LocalPlannerNode::convert_obstacle_to_points(
+  const f110_msgs::msg::Obstacle& obstacle)
+{
+  std::vector<Eigen::Vector2d> points;
+  
+  // 장애물을 간단한 사각형으로 근사 (4개 점)
+  // TODO: Frenet → Cartesian 변환 사용
+  // 지금은 간단히 s, d 좌표를 사용
+  double s = obstacle.s_center;
+  double d_left = obstacle.d_left;
+  double d_right = obstacle.d_right;
+  double s_start = obstacle.s_start;
+  double s_end = obstacle.s_end;
+  
+  // 간단한 근사: 전역 경로에서 해당 s 위치의 x, y 찾기
+  if (global_wpnts_scaled_ && !global_wpnts_scaled_->wpnts.empty()) {
+    for (const auto& wpnt : global_wpnts_scaled_->wpnts) {
+      if (std::abs(wpnt.s_m - s) < 0.1) {
+        // 장애물의 4개 모서리 점 생성
+        points.emplace_back(wpnt.x_m + d_left * std::cos(wpnt.psi_rad + M_PI/2),
+                           wpnt.y_m + d_left * std::sin(wpnt.psi_rad + M_PI/2));
+        points.emplace_back(wpnt.x_m + d_right * std::cos(wpnt.psi_rad + M_PI/2),
+                           wpnt.y_m + d_right * std::sin(wpnt.psi_rad + M_PI/2));
+        break;
+      }
+    }
+  }
+  
+  return points;
 }
 
 visualization_msgs::msg::MarkerArray LocalPlannerNode::create_delete_all_marker()

@@ -18,6 +18,8 @@
 #include "f110_msgs/msg/ot_wpnt_array.hpp"
 #include "f110_msgs/msg/wpnt_array.hpp"
 
+#include "teb_local_planner/teb.hpp"
+
 #include "rclcpp/rclcpp.hpp"
 
 namespace teb_local_planner
@@ -90,6 +92,9 @@ private:
   // 경로 생성
   std::pair<f110_msgs::msg::OTWpntArray, visualization_msgs::msg::MarkerArray> generate_evasion_trajectory(const f110_msgs::msg::Obstacle& obstacle);
   
+  // TEB 헬퍼 함수들
+  std::vector<Eigen::Vector2d> get_initial_path_from_global(const f110_msgs::msg::Obstacle& obstacle);
+  std::vector<Eigen::Vector2d> convert_obstacle_to_points(const f110_msgs::msg::Obstacle& obstacle);
 
   // 시각화
   visualization_msgs::msg::MarkerArray create_delete_all_marker();
