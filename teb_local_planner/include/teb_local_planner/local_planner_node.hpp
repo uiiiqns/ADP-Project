@@ -3,6 +3,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <tuple>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -78,6 +82,18 @@ private:
   void globalWaypointsCallback(const f110_msgs::msg::WpntArray::SharedPtr msg);
   void scaledWaypointsCallback(const f110_msgs::msg::WpntArray::SharedPtr msg);
 
+  // 장애물 필터링 및 처리
+  std::vector<f110_msgs::msg::Obstacle> filter_obstacles();
+  f110_msgs::msg::Obstacle find_closest_obstacle(const std::vector<f110_msgs::msg::Obstacle>& obstacles);
+  f110_msgs::msg::Obstacle predict_obstacle_movement(const f110_msgs::msg::Obstacle& obs);
+  
+  // 경로 생성
+  std::pair<f110_msgs::msg::OTWpntArray, visualization_msgs::msg::MarkerArray> generate_evasion_trajectory(const f110_msgs::msg::Obstacle& obstacle);
+  
+
+  // 시각화
+  visualization_msgs::msg::MarkerArray create_delete_all_marker();
+  
   f110_msgs::msg::ObstacleArray::SharedPtr obstacles_;
   f110_msgs::msg::WpntArray::SharedPtr global_wpnts_;
   f110_msgs::msg::WpntArray::SharedPtr global_wpnts_scaled_;
